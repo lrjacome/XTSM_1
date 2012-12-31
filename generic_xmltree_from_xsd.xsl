@@ -409,7 +409,7 @@
                  </xsl:attribute>
                </xsl:element>
              </xsl:element>
-             <input type="checkbox" checked="checked" >
+             <input type="checkbox">
               <xsl:element name="xsl:attribute">
                 <xsl:attribute name="name">xtsm_viewer_event</xsl:attribute>
                 <xsl:text>onclick:toggleProp_update_editor('disable');</xsl:text>
