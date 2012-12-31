@@ -64,26 +64,20 @@
 	<xsl:template match="xs:complexType[count(.//xs:element)=0]" >
 		<xsl:element name="xsl:template">
       <xsl:attribute name="match"><xsl:value-of select="@name"/></xsl:attribute>
-		  <li>
+		  <li><div>          
+        <xsl:element name="xsl:attribute"><xsl:attribute name="name"><xsl:text>gen_id</xsl:text></xsl:attribute><xsl:element name="xsl:call-template"><xsl:attribute name="name"><xsl:text>treeid</xsl:text></xsl:attribute></xsl:element></xsl:element>
 			  <input type="checkbox">
 				  <xsl:element name="xsl:attribute">
 					  <xsl:attribute name="name">xtsm_viewer_event</xsl:attribute>
 					  <xsl:text>onclick:toggleProp_update_editor('disable');</xsl:text>
 				  </xsl:element>
-          <xsl:element name="xsl:attribute">
-            <xsl:attribute name="name">
-              <xsl:text>checked</xsl:text>
-            </xsl:attribute>
-            <xsl:element name="xsl:choose">
-              <xsl:element name="xsl:when">
-                <xsl:attribute name="test">
-                  <xsl:text>@disable='1'</xsl:text>
-                </xsl:attribute>
-                <xsl:text>unchecked</xsl:text>
-              </xsl:element>
-              <xsl:element name="xsl:otherwise">
+          <xsl:element name="xsl:if">
+            <xsl:attribute name="test">not(@disable) or @disable!='1'</xsl:attribute>
+            <xsl:element name="xsl:attribute">
+              <xsl:attribute name="name">
                 <xsl:text>checked</xsl:text>
-              </xsl:element>
+              </xsl:attribute>
+              <xsl:text>checked</xsl:text>
             </xsl:element>
           </xsl:element>
         </input>
@@ -95,7 +89,7 @@
             <xsl:text>toolpanel</xsl:text>
           </xsl:attribute>
         </xsl:element>
-		  </li>
+		  </div></li>
     </xsl:element>
   </xsl:template>
     
@@ -236,20 +230,13 @@
           </img>
           <input type="checkbox">
             <xsl:element name="xsl:attribute"><xsl:attribute name="name"><xsl:text>xtsm_viewer_event</xsl:text></xsl:attribute><xsl:text>onclick:toggleProp_update_editor('disable');</xsl:text></xsl:element>
-            <xsl:element name="xsl:attribute">
-              <xsl:attribute name="name">
-                <xsl:text>checked</xsl:text>
-              </xsl:attribute>
-              <xsl:element name="xsl:choose">
-                <xsl:element name="xsl:when">
-                  <xsl:attribute name="test">
-                    <xsl:text>@disable='1'</xsl:text>
-                  </xsl:attribute>
-                  <xsl:text>unchecked</xsl:text>
-                </xsl:element>
-                <xsl:element name="xsl:otherwise">
+            <xsl:element name="xsl:if">
+              <xsl:attribute name="test">not(@disable) or @disable!='1'</xsl:attribute>
+              <xsl:element name="xsl:attribute">
+                <xsl:attribute name="name">
                   <xsl:text>checked</xsl:text>
-                </xsl:element>
+                </xsl:attribute>
+                <xsl:text>checked</xsl:text>
               </xsl:element>
             </xsl:element>
           </input>
@@ -411,10 +398,30 @@
             <xsl:text>-2</xsl:text>
           </xsl:attribute>
           <li>
-            <input type="checkbox" checked="checked" >
+           <div>
+             <xsl:element name="xsl:attribute">
+               <xsl:attribute name="name">
+                 <xsl:text>gen_id</xsl:text>
+               </xsl:attribute>
+               <xsl:element name="xsl:call-template">
+                 <xsl:attribute name="name">
+                   <xsl:text>treeid</xsl:text>
+                 </xsl:attribute>
+               </xsl:element>
+             </xsl:element>
+             <input type="checkbox" checked="checked" >
               <xsl:element name="xsl:attribute">
                 <xsl:attribute name="name">xtsm_viewer_event</xsl:attribute>
                 <xsl:text>onclick:toggleProp_update_editor('disable');</xsl:text>
+              </xsl:element>
+              <xsl:element name="xsl:if">
+                <xsl:attribute name="test">not(@disable) or @disable!='1'</xsl:attribute>
+                <xsl:element name="xsl:attribute">
+                  <xsl:attribute name="name">
+                    <xsl:text>checked</xsl:text>
+                  </xsl:attribute>
+                  <xsl:text>checked</xsl:text>
+                </xsl:element>
               </xsl:element>
             </input>
             <a title="Non-standard XTSM tag." style="background-color:yellow;">
@@ -429,6 +436,7 @@
                 <xsl:text>toolpanel</xsl:text>
               </xsl:attribute>
             </xsl:element>
+           </div>
           </li>
         </xsl:element>
 
