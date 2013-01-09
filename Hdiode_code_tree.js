@@ -65,13 +65,9 @@ function Hdiode_code_tree(html_div, sources) {
         // from first parent division's gen_id property
         var change_prop, elmpath, docparser, xml, target, newval, temp, targets, i;
         change_prop = event.data.args[0].replace(/["']{1}/gi, "");
-        elmpath = $(event.target).parents("div:first").get(0).
-            getAttribute('gen_id').replace(/["']{1}/gi, "").
-            split('divtree__')[1].replace(/__/g, "]/").replace(/_/g, "[") + "]";
         docparser = new DOMParser();
         xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
-        target = xml.evaluate(elmpath, xml, null, XPathResult.
-            UNORDERED_NODE_ITERATOR_TYPE, null).iterateNext();
+        target = event.data.container.event_get_elm(event, xml);
         newval = ($(target).attr(change_prop) === "1") ? '0' : '1';
         if ($(target).attr(change_prop) === "1") {
             $(target).attr(change_prop, "0");
@@ -80,6 +76,7 @@ function Hdiode_code_tree(html_div, sources) {
         }
         if (event.ctrlKey) {
             //ctrl-toggle applies to children
+            elmpath = event.data.container.event_get_elmpath(event);
             targets = xml.evaluate(elmpath + "/*", xml, null,
                 XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
             for (i = 0; i < targets.snapshotLength; i += 1) {
@@ -87,7 +84,8 @@ function Hdiode_code_tree(html_div, sources) {
             }
         }
         if (event.altKey) {
-            //apply-toggle applies to all decendants
+            //alt-toggle applies to all decendants
+            elmpath = event.data.container.event_get_elmpath(event);
             targets = xml.evaluate(elmpath + "//*", xml, null,
                 XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
             for (i = 0; i < targets.snapshotLength; i += 1) {
@@ -100,27 +98,110 @@ function Hdiode_code_tree(html_div, sources) {
     }
     this.toggleProp_update_editor = toggleProp_update_editor;
 
+    function event_get_elmpath(event) {
+    // given an event, this returns the xpath to the corresponding xml element that generated the control
+        var elmpath;
+        elmpath = $(event.target).parents("div:first").get(0).
+            getAttribute('gen_id');
+        if (elmpath.substr(elmpath.length - 2, 2) === '__') {
+            if (event.target.name) {
+                elmpath += event.target.name;
+            } else {
+                elmpath = elmpath.substr(0, elmpath.length - 2);
+            }
+        }
+        elmpath = elmpath.split('divtree__')[1].replace(/__/g, "]/").
+            replace(/_/g, "[") + "]";        
+        return elmpath;
+    }
+    this.event_get_elmpath = event_get_elmpath;
+
+    function event_get_elm(event, xml) {
+        // given an event, this returns the xml object that generated the control;
+        // (it safely assumes there is only one such element)
+        var elmpath;
+        elmpath = event.data.container.event_get_elmpath(event);
+        target = xml.evaluate(elmpath, xml, null, XPathResult.
+            UNORDERED_NODE_ITERATOR_TYPE, null).iterateNext();
+        return target;
+    }
+    this.event_get_elm = event_get_elm;
+
+
     function updateElement_update_editor(event) {
         // toggles an element between expanded and collapsed view by 
         // rewriting XML, and re-generating entire tree
         // retrieve XPATH to generating XML element from 
         // first parent division's gen_id property
-        var elmpath, docparser, xml, target;
+        //var elmpath, docparser, xml, target;
         elmpath = $(event.target).parents("div:first").get(0).
-            getAttribute('gen_id') + '__' + event.target.name;
+            getAttribute('gen_id');
+        if (elmpath.substr(elmpath.length - 2, 2) === '__') {
+            elmpath += event.target.name;
+        }
         elmpath = elmpath.split('divtree__')[1].replace(/__/g, "]/").
             replace(/_/g, "[") + "]";
         docparser = new DOMParser();
         xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
         target = xml.evaluate(elmpath, xml, null, XPathResult.
             UNORDERED_NODE_ITERATOR_TYPE, null).iterateNext();
-        target.firstChild.data = event.target.value;
+        if (target.firstChild) { target.firstChild.data = event.target.value } else { target.appendChild(xml.createTextNode(event.target.value)); }
         event.data.container.xml_string = xmltoString(xml);
         event.data.container.update_editor();
         // (tree is automatically refreshed by onchange event of codemirror editor)
     }
     this.updateElement_update_editor = updateElement_update_editor;
 
+    function autocomplete(event) {
+        var docparser;//  res, xml;
+        //first exit if the keypress is not ctrl-right- or ctrl-left-arrow
+        tevent = event;
+        if (!(event.ctrlKey)) { return; }
+        if ((event.keyCode !== 39) && (event.keyCode !== 37)) { return; }
+        // this event handler autocompletes by looking up values 
+        // from xml dom when uparrow is pressed.
+        // check if this input was the last pressed 
+        // autocomplete, if not, reset index to zero
+        if (event.data.container.autocomplete_lastfield !==
+                $(event.target).attr('name')) {
+            event.data.container.autocomplete_lastfield = $(event.target).attr('name');
+            event.data.container.autocomplete_root = $(event.target).attr('value');
+            event.data.container.autocomplete_index = 0;
+        } else {
+            if (event.keyCode === 39) { event.data.container.autocomplete_index += 1; }
+            if (event.keyCode === 37) { event.data.container.autocomplete_index -= 1; }
+        }
+        docparser = new DOMParser();
+        xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
+        res = xml.evaluate(event.data.args[0].split("'")[1].replace('$', '"'+event.data.container.autocomplete_root+'"'), xml, null,
+            XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
+        // take modulus of index to reference hits, insert them into field
+        if (res.snapshotLength > 1) {
+            $(event.target).attr('value', $(res.snapshotItem(
+                event.data.container.autocomplete_index - Math.floor(
+                    event.data.container.autocomplete_index / res.snapshotLength
+                ) * res.snapshotLength
+            )).text());
+        } else { $(event.target).attr('value', $(res.snapshotItem(0)).text()); }
+    }
+    this.autocomplete = autocomplete;
+
+    function modifyElement_update_editor(event){
+        docparser = new DOMParser();
+        xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
+        elm = event.data.container.event_get_elm(event,xml);
+        if (event.data.args[0] === "'delete'") {
+            elm.parentElement.removeChild(elm);
+        } else if (event.data.args[0] === "'move'") {
+        } else if (event.data.args[0] === "'clone'") {
+            //THIS DOESN'T WORK YET
+            alert('cloning');
+            elm.parentElement.insertBefore(elm, elm);
+        }
+        event.data.container.xml_string = xmltoString(xml);
+        event.data.container.update_editor();
+    }
+    this.modifyElement_update_editor=modifyElement_update_editor;
 
     function bind_events() {
         // this searches the html tree looking for xtsm_viewer_event attributes 
@@ -128,27 +209,37 @@ function Hdiode_code_tree(html_div, sources) {
         // eventType:handlerFunctionName(arg1,arg2...)
         // it then attaches the handler (should be a method of this object) 
         // to the HTML event
-        var bind_targets, next_target, eventtype, handler_name, handler_args, that;
+        var bind_targets, next_target, eventtype, handler_name, handler_args,
+            that, thisevent, allevents, j;
         bind_targets = document.evaluate('//*[@xtsm_viewer_event]', document, null,
             XPathResult.UNORDERED_NODE_ITERATOR_TYPE, null);
         next_target = bind_targets.iterateNext();
         while (next_target) {
             // this parses the event type and handler function 
             // from the xtsm_viewer_event attribute
-            eventtype = next_target.getAttribute('xtsm_viewer_event').split(':')[0];
-            if (eventtype.substr(0, 2) === 'on') {
-                eventtype = eventtype.substr(2);
-            }
-            handler_name = next_target.getAttribute('xtsm_viewer_event').
-                split(':')[1].split('(')[0];
-            handler_args = next_target.getAttribute('xtsm_viewer_event').
-                split(':')[1].split('(')[1].split(')')[0].split(',');
-            if (typeof this[handler_name] === 'function') {
-                //this[handler_name].apply(this, handler_args);
-                //this line does the event-binding
-                that = this;
-                $(next_target).on(eventtype, null,
-                    {container: this, args: handler_args}, this[handler_name]);
+            // multiple events should be split by semicolons
+            //var thisevent=next_target.getAttribute('xtsm_viewer_event').split(';')[0];
+            allevents = next_target.getAttribute('xtsm_viewer_event').split(';');
+            for (j = 0; j < allevents.length - 1; j += 1) {
+                thisevent = allevents[j];
+                eventtype = thisevent.split(':')[0];
+                if (eventtype.substr(0, 2) === 'on') {
+                    eventtype = eventtype.substr(2);
+                }
+                handler_name = thisevent.
+                    split(':')[1].split('(')[0];
+                handler_args = thisevent.
+                    split(':')[1];
+                handler_args = handler_args.substring(handler_args.indexOf("(") + 1);
+                handler_args = handler_args.substring(0, handler_args.lastIndexOf(")")).match(/(?!;| |$)([^";]*"[^"]*")*([^";]*[^ ";])?/g); //split(',');
+//                if (handler_name === "autocomplete") {alert(handler_args ); }
+                if (typeof this[handler_name] === 'function') {
+                    //this[handler_name].apply(this, handler_args);
+                    //this line does the event-binding
+                    that = this;
+                    $(next_target).on(eventtype, null,
+                        { container: this, args: handler_args }, this[handler_name]);
+                }
             }
             next_target = bind_targets.iterateNext();
         }
