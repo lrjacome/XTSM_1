@@ -1,4 +1,3 @@
-﻿
 /*jslint browser: true*/
 /*global $, jQuery, DOMParser, XMLSerializer, XSLTProcessor, XPathResult, CodeMirror */
 
@@ -111,7 +110,7 @@ function Hdiode_code_tree(html_div, sources) {
             }
         }
         elmpath = elmpath.split('divtree__')[1].replace(/__/g, "]/").
-            replace(/_/g, "[") + "]";        
+            replace(/_/g, "[") + "]";
         return elmpath;
     }
     this.event_get_elmpath = event_get_elmpath;
@@ -119,7 +118,7 @@ function Hdiode_code_tree(html_div, sources) {
     function event_get_elm(event, xml) {
         // given an event, this returns the xml object that generated the control;
         // (it safely assumes there is only one such element)
-        var elmpath;
+        var elmpath, target;
         elmpath = event.data.container.event_get_elmpath(event);
         target = xml.evaluate(elmpath, xml, null, XPathResult.
             UNORDERED_NODE_ITERATOR_TYPE, null).iterateNext();
@@ -134,6 +133,7 @@ function Hdiode_code_tree(html_div, sources) {
         // retrieve XPATH to generating XML element from 
         // first parent division's gen_id property
         //var elmpath, docparser, xml, target;
+    	var elmpath, docparser, xml, target;
         elmpath = $(event.target).parents("div:first").get(0).
             getAttribute('gen_id');
         if (elmpath.substr(elmpath.length - 2, 2) === '__') {
@@ -145,7 +145,7 @@ function Hdiode_code_tree(html_div, sources) {
         xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
         target = xml.evaluate(elmpath, xml, null, XPathResult.
             UNORDERED_NODE_ITERATOR_TYPE, null).iterateNext();
-        if (target.firstChild) { target.firstChild.data = event.target.value } else { target.appendChild(xml.createTextNode(event.target.value)); }
+        if (target.firstChild) { target.firstChild.data = event.target.value; } else { target.appendChild(xml.createTextNode(event.target.value)); }
         event.data.container.xml_string = xmltoString(xml);
         event.data.container.update_editor();
         // (tree is automatically refreshed by onchange event of codemirror editor)
@@ -153,7 +153,7 @@ function Hdiode_code_tree(html_div, sources) {
     this.updateElement_update_editor = updateElement_update_editor;
 
     function autocomplete(event) {
-        var docparser;//  res, xml;
+        var docparser, tevent, xml, res;//  res, xml;
         //first exit if the keypress is not ctrl-right- or ctrl-left-arrow
         tevent = event;
         if (!(event.ctrlKey)) { return; }
@@ -173,7 +173,7 @@ function Hdiode_code_tree(html_div, sources) {
         }
         docparser = new DOMParser();
         xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
-        res = xml.evaluate(event.data.args[0].split("'")[1].replace('$', '"'+event.data.container.autocomplete_root+'"'), xml, null,
+        res = xml.evaluate(event.data.args[0].split("'")[1].replace('$', '"' + event.data.container.autocomplete_root + '"'), xml, null,
             XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
         // take modulus of index to reference hits, insert them into field
         if (res.snapshotLength > 1) {
@@ -186,22 +186,24 @@ function Hdiode_code_tree(html_div, sources) {
     }
     this.autocomplete = autocomplete;
 
-    function modifyElement_update_editor(event){
+    function modifyElement_update_editor(event) {
+		var docparser, xml, elm;
         docparser = new DOMParser();
         xml = docparser.parseFromString(event.data.container.xml_string, "text/xml");
-        elm = event.data.container.event_get_elm(event,xml);
+        elm = event.data.container.event_get_elm(event, xml);
         if (event.data.args[0] === "'delete'") {
             elm.parentElement.removeChild(elm);
         } else if (event.data.args[0] === "'move'") {
         } else if (event.data.args[0] === "'clone'") {
             //THIS DOESN'T WORK YET
+			var alert;
             alert('cloning');
             elm.parentElement.insertBefore(elm, elm);
         }
         event.data.container.xml_string = xmltoString(xml);
         event.data.container.update_editor();
     }
-    this.modifyElement_update_editor=modifyElement_update_editor;
+    this.modifyElement_update_editor = modifyElement_update_editor;
 
     function bind_events() {
         // this searches the html tree looking for xtsm_viewer_event attributes 
@@ -291,5 +293,45 @@ function Hdiode_code_tree(html_div, sources) {
         });
     }
     this.editor.setGutterMarker(0, "note-gutter", document.createTextNode("start>"));
+
     return this;
+
+
+}
+
+function main() {
+	"use strict";
+
+	//Creates new hdiode tree
+	var arg;
+	arg = new Hdiode_code_tree(document.getElementById('Create Tree'), {xml_string: '<none>', xsl_string: '<none>', xsd_string: 'nausea'});
+	arg.load_file("sofartlight.xslt", 'xsl_string');
+	arg.load_file("../sequences/12-1-2012/sampling_added.xtsm", 'xml_string');
+
+	function testing() { //Used for testing only
+		alert('Hi');
+	}
+
+	function load_new_file() {
+		var filename;
+		filename = document.getElementById("load_file").value.split('c:/wamp/www').pop();
+		arg.load_file(filename, 'xml_string');
+	}
+
+	function save_file() { //NOT DONE!!
+		var save_name, code;
+		save_name = document.getElementById('save_file').value.split('c:/wamp/www/sequences').pop();
+		code = arg.xml_string;
+		alert(save_name);
+		$.post("save_xtsm.php", {filename: save_name, filedata: code});
+		//$.post("save_xtsm.php", {filename: $.base64.encode('/sequences/12-1-2012/work.xtsm'), filedata: $.base64.encode('12345')}, function () {alert('Mission Complete!'); });
+	}
+
+	function refresh() {arg.refresh_tree(); }
+
+	//Controls File Operations, Load, Save, and Refresh Buttons
+	document.getElementById("file_menu").onclick = function () {testing(); }; //Not Done
+	document.getElementById("load").onclick = function () {load_new_file(); }; //Done
+	document.getElementById("save").onclick = function () {save_file(); }; //Not Done
+	document.getElementById("refresh").onclick = function () {refresh(); }; //Done
 }
