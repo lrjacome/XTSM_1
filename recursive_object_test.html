@@ -9,21 +9,21 @@
 				  line-height: 1em;
 				  font-family: monospace;
 				  _position: relative; /* IE6 hack */}
-	.hdiode_xml_tree_titlediv {border:solid; border-width:thin; background-color:#9C3}
-	.hdiode_xml_tree_cmdiv {border:solid; border-width:thin;}
-	.hdiode_xml_tree_treediv {border:solid; border-width:thin;}
+    .hdiode_xml_tree_titlediv {border:solid; border-width:thin; background-color:#9C3}
+    .hdiode_xml_tree_cmdiv {border:solid; border-width:thin;}
+    .hdiode_xml_tree_treediv {border:solid; border-width:thin;}
 	.note-gutter { width: 3em; background: grey; }
-	</style>
+    </style>
 	<script src="codemirror-3.0/lib/codemirror.js"></script>
-	<link rel="stylesheet" href="codemirror-3.0/lib/codemirror.css">
-	<script src="codemirror-3.0/mode/xml/xml.js"></script>
+    <link rel="stylesheet" href="codemirror-3.0/lib/codemirror.css">
+    <script src="codemirror-3.0/mode/xml/xml.js"></script>
 	<script language="javascript" type="text/javascript" src="../jquery/jquery-1.7.1.js"></script>
-	<script src="codemirror-3.0/lib/util/closetag.js"></script>
+    <script src="codemirror-3.0/lib/util/closetag.js"></script>
 	<script src="Hdiode_code_tree.js"></script>
-	<script src="file_operations.js"></script>
 	<link rel="stylesheet" href="../xtsm.css">
 
-</head><body>
+</head>
+<body>
 	<div id="Create File Operations" style="border:1px solid;">
 		<img id = "file_menu" src="/images/RightFillTriangleIcon.png" height="15px"/>
 		File Operations
@@ -44,27 +44,8 @@
 				<img id="save" src="/images/seqicon_save.png" height="20px" title="Save Now" />
 			</td>
 		</tr></table>
-	<div id="Create Tree">
-		<script>
-			{
-			arg=new Hdiode_code_tree(document.getElementById('Create Tree'),{xml_string:'<anele><m></m></anele>',xsl_string:'<none>',xsd_string:'nausea'}) 
-			arg.load_file("sofartlight.xslt",'xsl_string') 
-			arg.load_file("../sequences/12-1-2012/sampling_added.xtsm",'xml_string') 
-			}
-		</script>
 	</div>
-	<div id="File Operation Functionality">
-		<script>
-			{
-			function testing()
-				{
-				alert('Hi')
-				}
-			document.getElementById("file_menu").onclick = function(){testing()};
-			document.getElementById("refresh").onclick = function(){testing()};
-			document.getElementById("load").onclick = function(){testing()};
-			document.getElementById("save").onclick = function(){testing()};
-			}
-		</script>
+	<div id="Create Tree">
+		<script language="javascript" type="text/javascript">main();</script>
 	</div>
 </body>
