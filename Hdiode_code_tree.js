@@ -302,14 +302,55 @@ function Hdiode_code_tree(html_div, sources) {
 function main() {
 	"use strict";
 
-	//Creates new hdiode tree
-	var arg;
-	arg = new Hdiode_code_tree(document.getElementById('Create Tree'), {xml_string: '<none>', xsl_string: '<none>', xsd_string: 'nausea'});
-	arg.load_file("sofartlight.xslt", 'xsl_string');
-	arg.load_file("../sequences/12-1-2012/sampling_added.xtsm", 'xml_string');
+	var arg, file_counter, parser_counter;
 
-	function testing() { //Used for testing only
-		alert('Hi');
+	//Creates new hdiode tree
+	arg = new Hdiode_code_tree(document.getElementById('Create_Tree'), {xml_string: '<none>', xsl_string: '<none>', xsd_string: 'nausea'});
+	arg.load_file("sofartlight.xslt", 'xsl_string');
+	arg.load_file("../MetaViewer/sequences/default.xtsm", 'xml_string');
+
+	file_counter = 0;
+	function file_operations() {
+	//Opens file operations, including load/save files options.
+		if (file_counter === 0) {
+			document.getElementById('file_menu').src = "/images/DownTriangleIcon.png";
+			document.getElementById('file_operations').style.display = "block";
+			file_counter = 1;
+		} else if (file_counter === 1) {
+			document.getElementById('file_menu').src = "/images/RightFillTriangleIcon.png";
+			document.getElementById('file_operations').style.display = "none";
+			file_counter = 0;
+		}
+	}
+
+	parser_counter = 0;
+	function parser_operations() {
+	//Opens parser operations, including parse file, post/retreive experiment data, etc.
+		if (parser_counter === 0) {
+			document.getElementById('parser_menu').src = "/images/DownTriangleIcon.png";
+			document.getElementById('parser_operations').style.display = "block";
+			parser_counter = 1;
+		} else if (parser_counter === 1) {
+			document.getElementById('parser_menu').src = "/images/RightFillTriangleIcon.png";
+			document.getElementById('parser_operations').style.display = "none";
+			parser_counter = 0;
+		}
+	}
+
+	function default_save_name() {
+		var x, year, month, day, hour, minute, second, datetime, save_name;
+
+		x = new Date();
+		year = x.getFullYear();
+		month = x.getMonth() + 1;
+		day = x.getDate() + 1;
+		hour = x.getHours();
+		minute = x.getMinutes();
+		second = x.getSeconds();
+		datetime = month + "-" + day + "-" + year + "/" + hour + "h_" + minute + "m_" + second + "s";
+		save_name = "c:/wamp/www/MetaViewer/sequences/" + datetime + ".xtsm";
+
+		return save_name;
 	}
 
 	function load_new_file() {
@@ -318,20 +359,30 @@ function main() {
 		arg.load_file(filename, 'xml_string');
 	}
 
-	function save_file() { //NOT DONE!!
-		var save_name, code;
-		save_name = document.getElementById('save_file').value.split('c:/wamp/www/sequences').pop();
+	function save_file() {
+		var save_name, test_name, code;
+		save_name = document.getElementById('save_file').value;
 		code = arg.xml_string;
-		alert(save_name);
-		$.post("save_xtsm.php", {filename: save_name, filedata: code});
-		//$.post("save_xtsm.php", {filename: $.base64.encode('/sequences/12-1-2012/work.xtsm'), filedata: $.base64.encode('12345')}, function () {alert('Mission Complete!'); });
+		test_name = save_name.substring(2);
+		if (test_name.indexOf(':') !== -1) {alert('File name cannot contain ":", besides "c:/..."'); } else {
+			$.post("save_file.php", {filename: save_name, filedata: code}, function () {alert('File Saved'); });
+		}
 	}
 
-	function refresh() {arg.refresh_tree(); }
+	function refresh() {
+	//Refreshes code tree, resets load file and save file text boxes.
+		arg.refresh_tree();
+		document.getElementById('load_file').value = "";
+		document.getElementById('save_file').value = default_save_name();
+		counter = 1;
+		file_operations();
+	}
 
 	//Controls File Operations, Load, Save, and Refresh Buttons
-	document.getElementById("file_menu").onclick = function () {testing(); }; //Not Done
-	document.getElementById("load").onclick = function () {load_new_file(); }; //Done
-	document.getElementById("save").onclick = function () {save_file(); }; //Not Done
-	document.getElementById("refresh").onclick = function () {refresh(); }; //Done
+	document.getElementById("file_menu").onclick = function () {file_operations() };
+	document.getElementById("parser_menu").onclick = function () {parser_operations() };
+	document.getElementById("load").onclick = function () {load_new_file(); };
+	document.getElementById("save_file").defaultValue = default_save_name();
+	document.getElementById("save").onclick = function () {save_file(); };
+	document.getElementById("refresh").onclick = function () {refresh(); };
 }
