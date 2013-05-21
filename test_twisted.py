@@ -24,6 +24,10 @@ import uuid, time, sys
 import socket, __main__ as main
 import pdb
 
+import traceback,  code
+
+
+
 class HTTPRequest(BaseHTTPRequestHandler):
     """
     A class to handle HTTP request interpretation
@@ -68,33 +72,41 @@ class CommandProtocol(protocol.Protocol):
         except AttributeError: self.factory.openConnections={self.ConnectionUID:self}
         print "Connected from", self.peer
         self.factory.clientManager.connectLog(self.peer)
+        self.alldata=''
     def dataReceived(self,data):
         """
         Algorithm called each time a data fragment (packet typ <1300 bytes) is taken in on socket
         If last packet in message, records the requested command in the queue
         """
-        # first determine message length
-        if not hasattr(self,'length'):
-            self.length=data.find('--'+HTTPRequest(data).
-                                    headers.dict['content-type'].split('boundary=')[-1]
-                                    )+int(HTTPRequest(data).headers.dict['content-length'])
-            self.alldata=''
-        # if the entirety of message not received, append fragment and continue
-        if self.length > (len(self.alldata)+len(data)):
-            self.alldata+=data
+        # on receipt of the first fragment determine message length, extract header info
+        # NOTE: this can only handle header lengths smaller than the fragment size - 
+        # the header MUST arrive in the first fragment
+        # append the new data            
+        self.alldata+=data
+        if not hasattr(self,'mlength'):
+            # attempt to extract the header info with the current message subset
+            try:            
+                self.dataHTTP=HTTPRequest(self.alldata)
+                self.boundary=self.dataHTTP.headers['content-type'].split('boundary=')[-1]
+                fb=data.find('--'+self.boundary) # find the first used boundary string
+                if fb==-1: return # if there is none, the header must not be complete
+                # if there is a boundary, header must be complete; get header data
+                self.mlength=fb+int(self.dataHTTP.headers.dict['content-length'])
+                headerItemsforCommand=['host','origin','referer']
+                self.request=dict((k, self.dataHTTP.headers[k]) for k in headerItemsforCommand if k in self.dataHTTP.headers)
+                self.request.update({'ctime':self.ctime,'protocol':self})
+                # record where this request is coming from
+                self.factory.clientManager.elaborateLog(self.peer,self.request)
+            except: return  # if unsuccessful, wait for next packet and try again
+        # if we made it to here, the header has been received
+        # if the entirety of message not yet received, append this fragment and continue
+        if self.mlength > len(self.alldata):
             return
-        else: data=self.alldata+data
-        # if we have made it here, this is last fragment of message
-        drtime=time.time()
-        dataHTTP=HTTPRequest(data)
-        headerItemsforCommand=['host','origin','referer']
-        self.request=dict((k, dataHTTP.headers[k]) for k in headerItemsforCommand if k in dataHTTP.headers)
-        self.request.update({'timereceived':drtime,'ctime':self.ctime,'protocol':self})
-        # record where this request is coming from
-        self.factory.clientManager.elaborateLog(self.peer,self.request)        
+        # if we have made it here, this is last fragment of message       
+        # mark the 'all data received' time
+        self.request.update({'timereceived':time.time()})
         # strip multipart data from incoming HTTP request
-        boundary=dataHTTP.headers['content-type'].split('boundary=')[-1]
-        kv=[datas.split('name="')[-1].split('"\n\r\n\r') for datas in data.split('--'+boundary+'--')]
+        kv=[datas.split('name="')[-1].split('"\n\r\n\r') for datas in self.alldata.split('--'+self.boundary+'--')]
         self.params={k:v.rstrip() for k,v in kv[:-1]}
         # insert request, if valid, into command queue (persistently resides in self.Factory)        
         SC=SocketCommand(self.params,self.request)        
@@ -144,8 +156,12 @@ class ClientManager():
         self.clients[peer].update(request)
     def xstatus(self):
         stat='<Clients>'
-        for client in self.clients:
-            stat+='<Client><Name>'+socket.gethostbyaddr(client.split(":")[0])[0]+'</Name><IP>'+client+'</IP><Referer>'+(self.clients[client])['referer']+'</Referer><LastConnect>'+str(round(-(self.clients[client])['lastConnect']+time.time()))+'</LastConnect></Client>'
+        try:
+            statd=''
+            for client in self.clients:
+                statd+='<Client><Name>'+socket.gethostbyaddr(client.split(":")[0])[0]+'</Name><IP>'+client+'</IP><Referer>'+(self.clients[client])['referer']+'</Referer><LastConnect>'+str(round(-(self.clients[client])['lastConnect']+time.time()))+'</LastConnect></Client>'
+            stat+=statd
+        except: stat+='<Updating></Updating>'
         stat+='</Clients>'
         return stat
 
@@ -165,13 +181,19 @@ class CommandQueue():
         if len(self.queue)>0:
             self.queue.pop().execute(self.commandLibrary)
     def xstatus(self):
-        stat=""
+        stat="<Commands>"
         if hasattr(self,'queue'):
             for command in self.queue:
-                stat+="<Commands><Command><Name>"+command.params['IDLSocket_ResponseFunction']+"</Name>"
-                for param in command.params:
-                    stat+="<Parameter><Name>"+param+"</Name><Value><![CDATA["+command.params[param][0:25]+"]]></Value></Parameter>"
-                stat+="</Command></Commands>"
+                stat+='<Command>'
+                try:
+                    statd=''
+                    statd+="<Name>"+command.params['IDLSocket_ResponseFunction']+"</Name>"
+                    for param in command.params:
+                        statd+="<Parameter><Name>"+param+"</Name><Value><![CDATA["+command.params[param][0:25]+"]]></Value></Parameter>"
+                    stat+=statd
+                except: stat+="<Updating></Updating>"
+                stat+='</Command>'
+        stat+="</Commands>"
         return stat
 
 class CommandLibrary():
@@ -306,15 +328,20 @@ class GlabServerFactory(protocol.Factory):
         stat=""
         if hasattr(self,'openConnections'):
             stat+="<Connections>"
-            for connection in self.openConnections:
-                stat+="<Connection name='"+connection+"'>"
-                stat+="<From><Origin>"+self.openConnections[connection].request['origin']+"</Origin>"
-                stat+="<Referer>"+self.openConnections[connection].request['referer']+"</Referer>"
-                stat+="</From>"
-                stat+="<TimeElapsed>"+str(round(time.time()-self.openConnections[connection].request['timereceived']))+"</TimeElapsed>"
-                if self.openConnections[connection].params.has_key('IDLSocket_ResponseFunction'):
-                    stat+="<Command>"+self.openConnections[connection].params['IDLSocket_ResponseFunction']+"</Command>"
-                stat+="</Connection>"
+            try:            
+                for connection in self.openConnections:
+                    statd=""
+                    statd+="<Connection name='"+connection+"'>"
+                    statd+="<From><Origin>"+self.openConnections[connection].request['origin']+"</Origin>"
+                    statd+="<Referer>"+self.openConnections[connection].request['referer']+"</Referer>"
+                    statd+="</From>"
+                    statd+="<TimeElapsed>"+str(round(time.time()-self.openConnections[connection].request['ctime']))+"</TimeElapsed>"
+                    if self.openConnections[connection].params.has_key('IDLSocket_ResponseFunction'):
+                        statd+="<Command>"+self.openConnections[connection].params['IDLSocket_ResponseFunction']+"</Command>"
+                    statd+="</Connection>"
+                    stat+=statd
+            except:
+                stat+="<Updating></Updating>"
             stat+="</Connections>"
         return stat
 
@@ -447,5 +474,15 @@ class GlabPythonManager():
             stat=str(result_tree)
         return stat
 
-# do it all:
-theBeast=GlabPythonManager()
+if __name__ == '__main__':
+    try:
+        # do it all:
+        theBeast=GlabPythonManager()
+    except:
+        type, value, tb = sys.exc_info()
+        traceback.print_exc()
+        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
+        frame = last_frame().tb_frame
+        ns = dict(frame.f_globals)
+        ns.update(frame.f_locals)
+        code.interact(local=ns)
