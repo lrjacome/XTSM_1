@@ -24,10 +24,6 @@ import uuid, time, sys
 import socket, __main__ as main
 import pdb
 
-import traceback,  code
-
-
-
 class HTTPRequest(BaseHTTPRequestHandler):
     """
     A class to handle HTTP request interpretation
@@ -142,6 +138,13 @@ class DataContext():
         self.dict.update(data)
     def get(self,variablename):
         return self.dict[variablename]
+    def xstatus(self):
+        stat='<DataContext><Name>'+self.name+'</Name>'
+        for var in self.dict:
+            try: stat+='<Variable><Name>'+var+'</Name><Type><![CDATA['+str(type(self.dict[var]))+']]></Type><Value><![CDATA['+str(self.dict[var])[0:25]+']]></Value></Variable>'
+            except: stat+='<Unknown></Unknown>'
+        stat+='</DataContext>'
+        return stat
 
 class ClientManager():
     """
@@ -444,6 +447,12 @@ class GlabPythonManager():
         stat+=self.listener.xstatus()
         # Command Queue
         stat+=self.commandQueue.xstatus()
+        # Data Contexts
+        if hasattr(self,'dataContexts'):
+            stat+='<DataContexts>'
+            for dc in self.dataContexts.values():
+                stat+=dc.xstatus()
+            stat+='</DataContexts>'
         stat+='</Status>'
         if xformat=="html":
             # the xsl below transforms the status xml into viewable html
@@ -454,6 +463,7 @@ class GlabPythonManager():
                 <div><xsl:apply-templates select="Clients" /></div>
                 <div><xsl:apply-templates select="Connections" /></div>
                 <div><xsl:apply-templates select="Commands" /></div>
+                <div><xsl:apply-templates select="DataContexts" /></div>
             </xsl:template>
             <xsl:template match="Server"><table border="1px"><tr><td><b>Server:</b></td><td><xsl:value-of select="./Host/Name"/></td><td><xsl:value-of select="./Host/IP"/>:<xsl:value-of select="./Host/Port"/></td><td><b>Local Time:</b></td><td><xsl:value-of select="./LocalTime"/></td></tr></table></xsl:template>
             <xsl:template match="Clients"><table border="1px"><tr><td><b>Recent Clients:</b></td></tr><xsl:apply-templates select="Client"/></table></xsl:template>
@@ -463,6 +473,9 @@ class GlabPythonManager():
             <xsl:template match="Commands"><table border="1px"><tr><td><b>Command Queue:</b></td></tr><xsl:apply-templates select="Command"/></table></xsl:template>
             <xsl:template match="Command"><tr><td><xsl:value-of select="./Name"/></td><td><table border='1px'><xsl:apply-templates select="Parameter"/></table></td><td><xsl:value-of select="./TimeElapsed"/>s</td><td><xsl:value-of select="./Referer"/></td></tr></xsl:template>     
             <xsl:template match="Parameter"><tr><td><xsl:value-of select="./Name"/></td><td><xsl:value-of select="./Value"/></td></tr></xsl:template>            
+            <xsl:template match="DataContexts"><table border="1px"><tr><td><b>Data Contexts:</b></td></tr><xsl:apply-templates select="DataContext"/></table></xsl:template>
+            <xsl:template match="DataContext"><tr><td><xsl:value-of select="./Name"/></td><td><table border='1px'><xsl:apply-templates select="Variable"/></table></td></tr></xsl:template>            
+            <xsl:template match="Variable"><tr><td><xsl:value-of select="./Name"/></td><td><xsl:value-of select="./Type"/></td><td><xsl:value-of select="./Value"/></td></tr></xsl:template>
             <xsl:template match="*"><li><i><xsl:value-of select ="local-name()"/>:</i><ul><xsl:apply-templates /></ul></li>
             </xsl:template>
             </xsl:stylesheet>
@@ -474,15 +487,5 @@ class GlabPythonManager():
             stat=str(result_tree)
         return stat
 
-if __name__ == '__main__':
-    try:
-        # do it all:
-        theBeast=GlabPythonManager()
-    except:
-        type, value, tb = sys.exc_info()
-        traceback.print_exc()
-        last_frame = lambda tb=tb: last_frame(tb.tb_next) if tb.tb_next else tb
-        frame = last_frame().tb_frame
-        ns = dict(frame.f_globals)
-        ns.update(frame.f_locals)
-        code.interact(local=ns)
+# do it all:
+theBeast=GlabPythonManager()
