@@ -60,6 +60,7 @@ class CommandProtocol(protocol.Protocol):
     the request is valid, it will eventually be executed by the queue 
     """
     def connectionMade(self):
+        self.ctime=time.time()
         p=self.transport.getPeer()
         self.peer ='%s:%s' % (p.host,p.port)
         self.ConnectionUID=uuid.uuid1().__str__()
@@ -68,10 +69,27 @@ class CommandProtocol(protocol.Protocol):
         print "Connected from", self.peer
         self.factory.clientManager.connectLog(self.peer)
     def dataReceived(self,data):
+        """
+        Algorithm called each time a data fragment (packet typ <1300 bytes) is taken in on socket
+        If last packet in message, records the requested command in the queue
+        """
+        # first determine message length
+        if not hasattr(self,'length'):
+            self.length=data.find('--'+HTTPRequest(data).
+                                    headers.dict['content-type'].split('boundary=')[-1]
+                                    )+int(HTTPRequest(data).headers.dict['content-length'])
+            self.alldata=''
+        # if the entirety of message not received, append fragment and continue
+        if self.length > (len(self.alldata)+len(data)):
+            self.alldata+=data
+            return
+        else: data=self.alldata+data
+        # if we have made it here, this is last fragment of message
+        drtime=time.time()
         dataHTTP=HTTPRequest(data)
         headerItemsforCommand=['host','origin','referer']
         self.request=dict((k, dataHTTP.headers[k]) for k in headerItemsforCommand if k in dataHTTP.headers)
-        self.request.update({'timereceived':time.time(),'protocol':self})
+        self.request.update({'timereceived':drtime,'ctime':self.ctime,'protocol':self})
         # record where this request is coming from
         self.factory.clientManager.elaborateLog(self.peer,self.request)        
         # strip multipart data from incoming HTTP request
@@ -182,11 +200,19 @@ class CommandLibrary():
     # and an item 'request', which contains data on HTTP request and a reference to the twisted
     # protocol instance handling the response
     def set_global_variable_from_socket(self,params):
+        if params.has_key('IDLSPEEDTEST'):
+            srtime=time.time()
+            params['request']['protocol'].transport.write(params['IDLSPEEDTEST'])
+            ertime=time.time()
+            params['request']['protocol'].transport.write(str(srtime-params['request']['ctime'])+','+str(ertime-srtime)+','+str(params['request']['timereceived']-params['request']['ctime'])+',0,0,0')      
+            params['request']['protocol'].transport.loseConnection()
+            return
         try: 
             varname=set(params.keys()).difference(set(['IDLSocket_ResponseFunction','terminator','request','data_context'])).pop()
         except KeyError:
             params['request']['protocol'].transport.write('Error: Set_global requested, but no Variable Supplied')
             params['request']['protocol'].transport.loseConnection()
+            return
         dc=self.__determineContext__(params)
         dc.update({varname:params[varname]})
         params['request']['protocol'].transport.loseConnection()
