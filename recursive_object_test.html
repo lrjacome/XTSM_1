@@ -29,46 +29,59 @@
 		<img id = "file_menu" src="/images/RightFillTriangleIcon.png" height="15px"/>
 		File Operations
 		<img id = "refresh" src="/images/seqicon_refresh.png" height="20px" title="Refresh"/>
-		<table id="file_operations" style="display:none"><tr>
-		<td>
-			<div id="file_op">
-		<!-- Code does not list folders from directory yet -->
-				<script language="javascript">
-					$(document).ready(function () {
-						$('#file_op').load('lookup_sequences.php');
-					});
-				</script>
-			</div>
-		</td>
-		<td>
-			File to Load:
-				<input type="text" id="load_file" size="50"/>
-				<img id="load" src="/images/seqicon_load.png" height="20px" title="Load Now" />
-				<br />
-			File to Save:
-				<input type="text" id="save_file" size="50"/>
-				<img id="save" src="/images/seqicon_save.png" height="20px" title="Save Now" />
-			</td>
-		</tr></table>
+		<div id="file_operations" style="display:none" data-switch=0>
+			<table><tr>
+				<p id="file_op" style="display:none"/>
+				<div id='file_info_div'></div>
+				<td>
+					File to Load:
+					<input type="text" id="load_file" size="50"/>
+					<img id="load" src="/images/seqicon_load.png" height="20px" title="Load Now" />
+					<br />
+					File to Save:
+					<input type="text" id="save_file" size="50"/>
+					<img id="save" src="/images/seqicon_save.png" height="20px" title="Save Now" />
+				</td>
+			</tr></table>
+		</div>
 	</div>
 	<div><br /></div>
 	<div id="Create_Parser_Operations" style="border:1px solid;">
 	<!--No functions work yet-->
 		<img id="parser_menu" src="/images/RightFillTriangleIcon.png" height="15px"/>
 		Parser
-		<div id="parser_operations" style="display:none">
-			<input type="submit" value="Parse / Post" id="parse_post_button" /> <!-- onclick="javascript:parse_variables();" -->
+		<div id="parser_operations" style="display:none" data-switch=0>
+			<input type="submit" value="Parse Preview" id="parse_preview_button" /> <!-- onclick="javascript:parse_variables();" -->
 			<input type="submit" value="Post as Active Experiment" id="post_xtsm_button" /> <!-- onclick="javascript:post_xtsm();" -->
 			<input type="submit" value="Retrieve Active Experiment" id="retrieve_xtsm_button" /> <!-- onclick="javascript:retrieve_xtsm();" -->
 			<div id="parser_data_div">
-				<input type="submit" value="Disable IDL Socket" id="disable_idl_socket_button" /> <!-- onclick="javascript:disable_idl_socket();" -->
-				<input type="submit" value="Launch IDL" id="launch_idl_button" /> <!-- onclick="javascript:launch_idl();" -->
-				<input type="submit" value="Test Transfer Speed to IDL" id="test_idltransferspeed_button" /> <!-- onclick="javascript:test_idltransferspeed();" -->
+				<input type="submit" value="Disable Python Socket" id="disable_python_socket_button" /> <!-- onclick="javascript:disable_idl_socket();" -->
+				<input type="submit" value="Launch Python" id="launch_python_button" /> <!-- onclick="javascript:launch_idl();" -->
+				<input type="submit" value="Test Transfer Speed to Python" id="test_pythontransferspeed_button" /> <!-- onclick="javascript:test_idltransferspeed();" -->
 			</div>
 			<div>
 				Compress on Post/Retrieve
 			<input type="checkbox" id="compress_on_post_button"/>
+			<span id="python_speed_result" value=""></span>
 			</div>
+		</div>
+	</div>
+	<div><br /></div>
+	<div id="Create_Python_Operations" style="border:1px solid;">
+		<img id="python_menu" src="/images/RightFillTriangleIcon.png" height="15px"/>
+		Python Console
+		<div id="python_operations" style="display:none" data-switch=0>
+			Python response will appear here:
+			<br />
+			<textarea rows="10" cols="70" id="python_response_textarea" onfocus=""></textarea>
+			<br />
+			Enter python code here:
+			<br />
+			<textarea rows="10" cols="70" id="python_input_textarea" onfocus=""></textarea>
+			<input type="submit" value="Execute Now" id="python_submit_code_button"/>
+			<select size="10" id="python_variable_list">
+				<option>Python Variables:</option>
+			</select>
 		</div>
 	</div>
 	<div><br /></div>
