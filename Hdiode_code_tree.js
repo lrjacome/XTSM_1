@@ -301,6 +301,7 @@ function Hdiode_code_tree(html_div, sources) {
 
 function does_nothing() {
 	"use strict";
+	//Filler function
 
 	alert('This button is currently nonfunctional. Please try again later.');
 }
