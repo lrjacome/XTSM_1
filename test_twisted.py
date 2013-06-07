@@ -11,9 +11,15 @@ TODO:
     redirect stdio to console
     execute command queue items on schedule
 
+<<<<<<< HEAD
 @author: Nate
 """
 from twisted.internet import wxreactor
+=======
+@author: Nate, Jed
+"""
+from twisted.internet import wxreactor, defer
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
 wxreactor.install()
 from twisted.internet import protocol, reactor, task
 from lxml import etree
@@ -23,6 +29,12 @@ import wx, wx.html
 import uuid, time, sys
 import socket, __main__ as main
 import pdb
+<<<<<<< HEAD
+=======
+import heapq
+
+active_xtsm = ''
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
 
 class HTTPRequest(BaseHTTPRequestHandler):
     """
@@ -77,8 +89,14 @@ class CommandProtocol(protocol.Protocol):
         # on receipt of the first fragment determine message length, extract header info
         # NOTE: this can only handle header lengths smaller than the fragment size - 
         # the header MUST arrive in the first fragment
+<<<<<<< HEAD
         # append the new data            
         self.alldata+=data
+=======
+        # append the new data 
+        self.alldata+=data
+        #requests = 0   #For use with priorities
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         if not hasattr(self,'mlength'):
             # attempt to extract the header info with the current message subset
             try:            
@@ -89,6 +107,7 @@ class CommandProtocol(protocol.Protocol):
                 # if there is a boundary, header must be complete; get header data
                 self.mlength=fb+int(self.dataHTTP.headers.dict['content-length'])
                 headerItemsforCommand=['host','origin','referer']
+<<<<<<< HEAD
                 self.request=dict((k, self.dataHTTP.headers[k]) for k in headerItemsforCommand if k in self.dataHTTP.headers)
                 self.request.update({'ctime':self.ctime,'protocol':self})
                 # record where this request is coming from
@@ -97,6 +116,40 @@ class CommandProtocol(protocol.Protocol):
         # if we made it to here, the header has been received
         # if the entirety of message not yet received, append this fragment and continue
         if self.mlength > len(self.alldata):
+=======
+                self.request={k: self.dataHTTP.headers[k] for k in headerItemsforCommand if k in self.dataHTTP.headers}
+                self.request.update({'ctime':self.ctime,'protocol':self})
+                # record where this request is coming from
+                self.factory.clientManager.elaborateLog(self.peer,self.request)
+                # attempt to extract priority of request from header
+                """                
+                try:
+                    self.priority=self.dataHTTP.headers['content-type'].split('priority=')[1][:1]
+                except: return # if unsuccessful, try again until header is completely received
+                """
+            except: return  # if unsuccessful, wait for next packet and try again
+        # if we made it to here, the header has been received
+        # if the entirety of message not yet received, append this fragment and continue
+        """if not hasattr(self, 'priority'):
+            # server assigns a priority based upon header properties
+            self.priority = self.priorityQueue.get_priority()
+        if requests != 0:
+            # if this is not the first pass, then this item is at the top of the priority queue. so we eliminate it.
+            self.priorityQueue.pop(headerItemsforCommand, self.priority)
+            """
+        if self.mlength > len(self.alldata):
+            """
+            # puts in a new request to the priority queue
+            self.priorityQueue.put_on_queue(headerItemsforCommand, self.priority)
+            get_data = False
+            while get_data == False:
+                # request stops here until this request has top priority, in which case check_queue returns as True.
+                if self.priorityQueue.check_queue(headerItemsforCommand, self.priority):
+                    get_data = True
+                else:
+                    pass
+            requests += 1"""
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
             return
         # if we have made it here, this is last fragment of message       
         # mark the 'all data received' time
@@ -105,7 +158,11 @@ class CommandProtocol(protocol.Protocol):
         kv=[datas.split('name="')[-1].split('"\n\r\n\r') for datas in self.alldata.split('--'+self.boundary+'--')]
         self.params={k:v.rstrip() for k,v in kv[:-1]}
         # insert request, if valid, into command queue (persistently resides in self.Factory)        
+<<<<<<< HEAD
         SC=SocketCommand(self.params,self.request)        
+=======
+        SC=SocketCommand(self.params,self.request)
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         try:
             self.factory.commandQueue.add(SC)
         except AttributeError:
@@ -113,8 +170,13 @@ class CommandProtocol(protocol.Protocol):
         except:
             self.transport.write('Failed to insert SocketCommand in Queue, reason unknown')
             self.transport.loseConnection()
+<<<<<<< HEAD
         # close the connection - should be closed by the command execution
         # self.transport.loseConnection()
+=======
+    # close the connection - should be closed by the command execution
+    # self.transport.loseConnection()
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
     def connectionLost(self,reason):      
         try: del self.factory.openConnections[self.ConnectionUID]
         except KeyError: pass
@@ -238,10 +300,16 @@ class CommandLibrary():
             params['request']['protocol'].transport.write('Error: Set_global requested, but no Variable Supplied')
             params['request']['protocol'].transport.loseConnection()
             return
+<<<<<<< HEAD
+=======
+        if params.has_key('post_active_xtsm'):
+            self.compile_active_xtsm(params)
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         dc=self.__determineContext__(params)
         dc.update({varname:params[varname]})
         params['request']['protocol'].transport.loseConnection()
     def get_global_variable_from_socket(self,params):
+<<<<<<< HEAD
         try: 
             varname=params['variablename']
         except KeyError:
@@ -249,6 +317,18 @@ class CommandLibrary():
             params['request']['protocol'].transport.loseConnection()
         dc=self.__determineContext__(params)
         params['request']['protocol'].transport.write(str(dc.get[varname]))
+=======
+        if params.has_key('retrieve_active_xtsm'):
+            self.retrieve_active_xtsm(params)
+        else:
+            try: 
+                varname=params['variablename']
+            except KeyError:
+                params['request']['protocol'].transport.write('Error: get_global requested, but no variable name supplied')
+                params['request']['protocol'].transport.loseConnection()
+            dc=self.__determineContext__(params)
+            params['request']['protocol'].transport.write(str(dc.get[varname]))
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         params['request']['protocol'].transport.loseConnection()
     def ping_idl_from_socket(self,params):
         params['request']['protocol'].transport.write('pong')
@@ -259,12 +339,20 @@ class CommandLibrary():
     def execute_from_socket(self,params):
         dc=self.__determineContext__(params).dict
         # setup a buffer to capture response, temporarily grab stdio
+<<<<<<< HEAD
         params['request']['protocol'].transport.write('<IDL<           '+params['command']+'\n\r')        
+=======
+        params['request']['protocol'].transport.write('<Python<           '+params['command']+'\n\r')        
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         rbuffer = StringIO()
         sys.stdout = rbuffer
         try: exec(params['command'],dc)
         except:
+<<<<<<< HEAD
             params['request']['protocol'].transport.write('>IDL>   ERROR\n\r')
+=======
+            params['request']['protocol'].transport.write('>Python>   ERROR\n\r')
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
             params['request']['protocol'].transport.loseConnection()
             return
         # exec command has side-effect of adding builtins; remove them
@@ -272,6 +360,7 @@ class CommandLibrary():
             del dc['__builtins__']
         # update data context
         # remember to restore the original stdout!
+<<<<<<< HEAD
         sys.stdout = sys.__stdout__   
         # output the response buffer to the HTTP request
         params['request']['protocol'].transport.write('>IDL>   '+rbuffer.getvalue()+'\n\r')
@@ -279,6 +368,35 @@ class CommandLibrary():
         rbuffer.close()
     def compile_active_xtsm(self,params):
         pass
+=======
+        sys.stdout = sys.__stdout__ 
+        # requests variables from the directory and writes to user.
+        params['request']['protocol'].transport.write('>Code>')
+        for name in dir():
+            myvalue = eval(name)
+            params['request']['protocol'].transport.write('>Var>' + name + ' is ' + str(type(name)) + ' and is equal to ' + str(myvalue))
+        params['request']['protocol'].transport.write('>Code>')
+        # output the response buffer to the HTTP request
+        params['request']['protocol'].transport.write('>Python>   '+rbuffer.getvalue()+'\n\r')
+        params['request']['protocol'].transport.loseConnection()
+        rbuffer.close()
+    def compile_active_xtsm(self, params):
+        print 'Got here'
+        global active_xtsm
+        active_xtsm = params['post_active_xtsm']
+    
+    def retrieve_active_xtsm(self, params):
+        print 'Also got here'
+        global active_xtsm
+        params['request']['protocol'].transport.write('This is your code:' + active_xtsm)
+    
+    def stop_listening(self,params):
+        """
+        Exit routine, stops twisted reactor (abruptly).
+        """
+        print "Closing Python Manager"
+        reactor.stop()
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         
 class SocketCommand():
     def __init__(self, params=None, request=None, CommandLibrary=None):
@@ -364,8 +482,13 @@ class GlabPythonManager():
         # associate the CommandProtocol as a response method on that socket
         self.listener.protocol=CommandProtocol
         # tell the twisted reactor what port to listen on, and which factory to use for response protocols
+<<<<<<< HEAD
         reactor.listenTCP(8082, self.listener)
         def hello(): print 'Listening on port', 8082
+=======
+        reactor.listenTCP(8083, self.listener)
+        def hello(): print 'Listening on port', 8083
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
         reactor.callWhenRunning(hello)
         # associate the Command Queue and ClienManager with the socket listener
         self.listener.associateCommandQueue(self.commandQueue)
@@ -486,6 +609,65 @@ class GlabPythonManager():
             result_tree = transform(doc)
             stat=str(result_tree)
         return stat
+<<<<<<< HEAD
 
 # do it all:
 theBeast=GlabPythonManager()
+=======
+        
+class Priority_Queue(): #Not in use yet
+    """
+    Creates a priority queue for the server sending/receiving data
+    """
+    def __init__(self):
+        self.priority_1 = []
+        self.priority_2 = []
+        self.priority_3 = []
+        
+    def get_priority(self):
+        #Not Done Yet
+        pass
+        
+    def put_on_queue(self, item, priority):
+        # puts a request on a queue. queue depends on the priority of the request.
+        if priority == 1:
+            heapq.heappush(self.priority_1, item)
+        elif priority == 2:
+            heapq.heappush(self.priority_2, item)
+        elif priority == 3:
+            heapq.heappush(self.priority_3, item)
+        else: print 'Priority out of range'
+        
+    def check_priority(self, item, priority):
+        # checks if request is the highest of its priority and that the above priorities
+        #are empty. if not, request is not allowed to do anything.
+        if priority == 1:
+            if self.priority_1[0] == item:
+                return True
+            else:
+                return False
+        elif priority == 2:
+            if self.priority_1[0] == '' and self.priority_2[0] == item:
+                return True
+            else:
+                return False
+        elif priority == 3:
+            if self.priority_1[0] == '' and self.priority_2[0] == '' and self.priority_3[0] == item:
+                return True
+            else:
+                return False
+        else: print 'Priority out of range'
+        
+    def pop(self, item, priority):
+        # eliminates first item on a queue.
+        if priority == 1:
+            heapq.heappop(self.priority_1, item)
+        elif priority == 2:
+            heapq.heappop(self.priority_2, item)
+        elif priority == 3:
+            heapq.heappop(self.priority_3, item)
+        else: print 'Priority out of range'
+
+# do it all:
+theBeast = GlabPythonManager()
+>>>>>>> e57895dfd7d4c64d3f48273e57da7c428d33ae45
