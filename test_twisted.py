@@ -23,6 +23,7 @@ import wx, wx.html
 import uuid, time, sys
 import socket, __main__ as main
 import pdb
+import objectify
 
 active_xtsm = ''
 try:
@@ -296,13 +297,12 @@ class CommandLibrary():
         params['request']['protocol'].transport.loseConnection()
         rbuffer.close()
     def compile_active_xtsm(self, params):
-        print 'Got here'
-        global active_xtsm
-        active_xtsm = params['post_active_xtsm']
+        dc=self.__determineContext__(params)
+        #params['post_active_xtsm']
     
     def retrieve_active_xtsm(self, params):
-        print 'Also got here'
-        global active_xtsm
+        dc=self.__determineContext__(params)
+        active_xtsm=dc['active_xtsm']
         params['request']['protocol'].transport.write('This is your code:' + active_xtsm)
     
     def stop_listening(self,params):
