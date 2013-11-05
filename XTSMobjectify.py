@@ -58,6 +58,14 @@ class XTSM_core(object):
             setattr(self, nodeType, node)
             getattr(self,'_seq').insert(pos,node)
         return node
+        
+    def getDictMaxValue(self,dictionary): #LRJ 10-23-2013
+        """
+        Finds and returns the largrest numeric value in a dictionary
+        """        
+        self.valut=list(dictionary.values())
+        return max(self.valut)
+    
     
     def addAttribute(self,name,value):
         "adds an (XML) attribute to the node with assigned name and value"
@@ -193,7 +201,6 @@ class XTSM_core(object):
         then collects scopes of peers defined in scopePeers
         then collects parameter children 
         those later collected will shadow/overwrite coincident names
-        entirely untested
         """
         if self.__parent__: # if there is a parent, get its scope first (will execute recursively up tree)
             self.__parent__.buildScope()
@@ -554,7 +561,6 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         for channel in range(self.numchan):
             clocker=self.channelMap.isClock(self.tGroup,channel)
             if clocker:
-                #pdb.set_trace()
                 clockString = []
                 for elem in self.sequence.ParserOutput.clockStrings[clocker]:
                     if elem % 10 == 9:  # Eliminate rounding errors at the source. Ineligant solution, only works for clock periods smaller than 0.001.
@@ -569,10 +575,10 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         coerce explicit timing edges to a multiple of the parent clock's timebase
         (using the parent's resolution allows us to subresolution step.)
         """
-        self.groupEdges[2,:]=((self.groupEdges[2,:]/self.parentgenresolution).round())*self.parentgenresolution
-        self.groupIntervals[2,:]=((self.groupIntervals[2,:]/self.parentgenresolution).round())*self.parentgenresolution
-        self.groupIntervals[3,:]=((self.groupIntervals[3,:]/self.parentgenresolution).round())*self.parentgenresolution
-        self.lasttimecoerced=float(math.ceil(self.seqendtime/self.clockgenresolution))*self.clockgenresolution
+        self.groupEdges[2,:]=((self.groupEdges[2,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013 offset edges and intervals by 2*hardwaretime
+        self.groupIntervals[2,:]=((self.groupIntervals[2,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013
+        self.groupIntervals[3,:]=((self.groupIntervals[3,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013
+        self.lasttimecoerced=float(math.ceil((self.seqendtime+2*self.channelMap.hardwaretime)/self.clockgenresolution))*self.clockgenresolution
 
     def construct_denseT(self):
         """
@@ -581,10 +587,10 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         or from a clocking pulse needed by another channel 
         """
         # first create a sorted list of all times at beginning or end of interval, at an edge, or beginning or start of sequence
-        self.alltimes=numpy.unique(numpy.append(self.groupIntervals[2:4,],self.groupEdges[2,])) 
-        self.alltimes=numpy.unique(numpy.append(self.alltimes,[0,self.lasttimecoerced]))
+        self.alltimes=numpy.unique(numpy.append(self.groupIntervals[2:4,],self.groupEdges[2,]))
+        self.alltimes=numpy.unique(numpy.append(self.alltimes,[self.channelMap.hardwaretime,self.lasttimecoerced]))  #LRJ 10-23-2013 replaced 0 with hardware time
         # create a list denseT of all update times necessary in the experiment 
-        self.denseT=numpy.array([0])
+        self.denseT=numpy.array([self.channelMap.hardwaretime]) #LRJ replaced 0 with hardwaretime
         # loop through all windows between members of alltimes
         for starttime,endtime in zip(self.alltimes[0:-1],self.alltimes[1:]):
             # identify all intervals in this group active in this window
@@ -609,7 +615,8 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         allclcks=numpy.array([])
         if self.dTrain == True:  # Data in delay train cEdges is stored differently.
             for clockChannel in self.cStrings:
-                try: allclcks=numpy.concatenate([allclcks,self.cEdges[clockChannel][2,:]])
+                try: 
+                    allclcks=numpy.concatenate([allclcks,self.cEdges[clockChannel][2,:]])
                 except AttributeError: 
                     self.cEdges={}
                     self.cEdges.update({clockChannel:self.generate_clockEdges(self.cStrings[clockChannel],None,clockChannel)})
@@ -736,24 +743,23 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
                 while not (ptrs == fptrs).all():
                     active = ptrs<fptrs # identify active pointers
                     time = min(channeltimes[ptrs[active.nonzero()]]) # current time smallest value for "active" pointers
-                    hits = [ct == time for ct in channeltimes[ptrs]] # find active pointers
-                    bits = bitarray(hits) # assign bits based on whether a matching time was found
+                    #LRJ 10-30-2013 hitstrue disables unused channels. Previous version removes updates to unused channels but added extra updates to all used channels at the start and end of the sequence regardless of what XTSM requests
+                    lineindex=0
+                    hitstrue=[]
+                    for ct in channeltimes[ptrs]:
+                            if self.channels.values()[lineindex].intedges.shape[1] == 2 and ct==time:
+                                hitstrue.append(False)
+                            else:
+                                hitstrue.append(ct==time)
+                            lineindex+=1                            
+                    hits = [ct == time for ct in channeltimes[ptrs]] # find active pointers #LRJ 10-30-2013 this algorithm kept in to correctly iterate pointer values
+                    bits = bitarray(hitstrue) # assign bits based on whether a matching time was found
                     # populate output arrays
                     outvals[outptr] = numpy.fromstring((bits.tobytes()[::-1]),dtype=dtype)
                     outtimes[outptr] = time
                     # advances pointers if active and hits are both true for that pointer.
                     ptrs += numpy.logical_and(active, hits)
                     outptr += 1
-                # fix first and last outvals if any sync channels are unused (and hence should always be zero)
-                bits = []
-                for ch in self.channels.values():
-                    if ch.intedges.shape[1] == 2:  # unused chanels are initialized with 2 times: beginning and end
-                        bits.append(0)
-                    else:
-                        bits.append(1)
-                bits = bitarray(bits)
-                outvals[0] = numpy.fromstring((bits.tobytes()[::-1]), dtype = dtype)
-                outvals[-1] = numpy.fromstring((bits.tobytes()[::-1]), dtype = dtype)
             else: # for alternating rise/fall pulses
                 while not (ptrs == fptrs).all():
                     active = ptrs<fptrs # identify active pointers
@@ -783,7 +789,7 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
                 outptr += 1
             # Now change final values to be zeros.
             bits = bitarray(0 for ch in self.channels.values())
-            outvals[-1] = numpy.fromstring((bits[::-1].tobytes()[::-1]), dtype = dtype)
+            outvals[-1] = numpy.fromstring((bits[::-1].tobytes()[::-1]), dtype = dtype)              
         self.rawchannels = self.channels
         self.channels = {0:channelData(self, 0, times = outtimes, values = outvals)}
         self.numchan = 1
@@ -857,9 +863,8 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         low=0
         if not (str.upper(str(dTrain)) == 'YES' or str.upper(str(aPulse)) == 'YES'):  # algorithm for using a standard value,repeat pair
             if pWidth=='':  # if pWidth not defined create bisecting falltimes
-                falltimes=(ctimes[0:-1]+ctimes[1:])/2.  # creates too few falltimes; need a last fall
-                falltimes=numpy.insert(falltimes, 0, (ctimes[0] - 0.00002))
-                falltimes=numpy.append(falltimes,[ctimes[-1]+0.00002]) # creates a last fall time 20us after last rise
+                falltimes=(ctimes[0:-1]+ctimes[1:])/2.  # creates too few falltimes; need a last fall       
+                falltimes=numpy.append(falltimes,[ctimes[-1] + self.channelMap.hardwaretime]) #LRJ 10-31-2013 creates a last fall time one hardwaretime after last rise
             else: # if pulsewidth defined, use it to create falltimes
                 falltimes=numpy.add(ctimes,pWidth)
             if self.ResolutionBits>1: # algorithm for an analog clock channel (should rarely be used)
@@ -867,33 +872,31 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
                 low=chanObj.get_childNodeValue_orDefault('HighLevel',0.)
             if str.upper(aEdge)!='RISE':  # if not rising edge trigger, swap high and low
                 low,high=high,low
-            intedges=numpy.empty((5,(ctimes.shape[0]*2)+1))
-            intedges[3,::2]=low  # set values
-            intedges[3,1::2]=high
-            intedges[2,::2]=falltimes*self.clockgenresolution  # set times
-            intedges[2,1::2]=ctimes*self.clockgenresolution
-            intedges[0,::2]=falltimes  # set times
-            intedges[0,1::2]=ctimes
+            intedges=numpy.empty((5,(ctimes.shape[0]*2)))
+            intedges[3,1::2]=low  # set values
+            intedges[3,0::2]=high
+            intedges[2,1::2]=falltimes*self.clockgenresolution  # set times
+            intedges[2,0::2]=ctimes*self.clockgenresolution
+            intedges[0,1::2]=falltimes  # set times
+            intedges[0,0::2]=ctimes           
+        
         elif str.upper(str(aPulse)) == 'YES': # algorithm for an automatic pulser which does not require fall times/falls on its own
-            intedges = numpy.empty((5, ctimes.shape[0]))
+            intedges = numpy.empty((5, ctimes.shape[0])) 
             intedges[3,:] = high  # set all values as high, since they fall automatically
             intedges[2,:] = ctimes * self.clockgenresolution  # set reduced times
             intedges[0,:] = ctimes  # set times
+            
         else: # algorithm for a delay train pulser (returns only delay count between successive pulses in slot 0, times in slot 2)
             # negative time values (such as for digital clocking channel) appear as ridiculously large positive times.
-            # remove the large positive time, offset all times by 2ns, and add in a new start time
-            if ctimes[-1] > 10**8:
-                ctimes = numpy.add(numpy.delete(ctimes, -1), 0.00002)
-                ctimes = numpy.insert(ctimes, 0, 0)
+            # remove the large positive time, offset all times by 2ns, and add in a new start time                   
             delays=ctimes[1:]-ctimes[:-1]
+            delays=numpy.append(delays,self.channelMap.hardwaretime) #LRJ 10-29-2013 final delay time set to hardware time
             intedges=numpy.empty((5,ctimes.shape[0]))
             intedges[4,:]=-1
             intedges[3,:]=high  # all values for a delay train are irrelevant; a pulse will be issued at time ordinate
             intedges[2,0:]=ctimes  # times are recorded as actual times
-            #intedges[2,0]=self.clockgenresolution  # initial delay set to 1 time resolution
-            intedges[0,1:]=delays
-            intedges[0,0]=1  # initial delay set to 1
-        intedges[4,:]=-1  # denote that these are parser-generated edges
+            intedges[0,:]=delays
+        intedges[4,:]=-1  # denote that these are parser-generated edges       
         #intedges[0,:]=self.tGroup  # set tGroup
         intedges[1,:]=channelnumber  # set channel number
         return intedges
@@ -906,6 +909,7 @@ class channelData():
         self.channel=channelnumber
         self.parent=parent
         if times==None:
+            self.clockchans=[parent.channelMap.isClock(parent.tGroup,x) for x in range(parent.numchan)] #LRJ 10-31-2013 create list of clock channels in the active timing group. False for non-clocker channels, clocked timing group number for clock channels
             self.isclock=parent.channelMap.isClock(parent.tGroup,self.channel)
             # find the channel for data, get biographicals                
             chanObj=parent.channelMap.getItemByFieldValueSet('Channel',{'TimingGroup':str(parent.tGroup),'TimingGroupIndex':str(self.channel)})    # find the channel
@@ -948,12 +952,13 @@ class channelData():
                 # add first and last edge if necessary
                 if self.intedges.shape[1]>0:
                     if self.intedges[2,0]!=0:
-                        self.intedges=numpy.hstack([numpy.array([[0,self.channel,0,self.initval,-1]]).transpose(),self.intedges])
+                        self.intedges=numpy.hstack([numpy.array([[parent.denseT.searchsorted(parent.channelMap.hardwaretime),self.channel,parent.channelMap.hardwaretime,self.initval,-1]]).transpose(),self.intedges])
                     if self.intedges[2,-1]!=parent.lasttimecoerced:
-                        self.intedges=numpy.hstack([self.intedges,numpy.array([[parent.denseT.searchsorted(parent.lasttimecoerced),self.channel,parent.lasttimecoerced,self.holdingval,-1]]).transpose()])
+                       self.intedges=numpy.hstack([self.intedges,numpy.array([[parent.denseT.searchsorted(parent.lasttimecoerced),self.channel,parent.lasttimecoerced,self.holdingval,-1]]).transpose()])
                 else: 
-                    self.intedges=numpy.hstack([numpy.array([[0,self.channel,0,self.initval,-1]]).transpose(),self.intedges])
+                    self.intedges=numpy.hstack([numpy.array([[parent.denseT.searchsorted(parent.channelMap.hardwaretime),self.channel,parent.channelMap.hardwaretime,self.initval,-1]]).transpose(),self.intedges]) 
                     self.intedges=numpy.hstack([self.intedges,numpy.array([[parent.denseT.searchsorted(parent.lasttimecoerced),self.channel,parent.lasttimecoerced,self.holdingval,-1]]).transpose()])
+         
             else:
                 pass
         else:
@@ -983,9 +988,9 @@ class channelData():
         if ((maxv == '') or (maxv == None)): maxv = max(self.intedges[:,3])
         numpy.clip(self.intedges[:,3],max(-self.parent.scale/2.,minv),min(self.parent.scale/2.,maxv),self.intedges[:,3])        
         # scale & offset values into integer ranges
-        numpy.multiply((pow(2.,8*self.parent.bytespervalue-1)-1)/(self.parent.scale/2.),self.intedges[:,3],self.intedges[:,3])
-        numpy.add(pow(2.,8*self.parent.bytespervalue-1),self.intedges[:,3],self.intedges[:,3])
-
+        numpy.multiply((pow(2.,self.parent.ResolutionBits-1)-1)/(self.parent.scale/2.),self.intedges[:,3],self.intedges[:,3]) #LRJ 10-15-2013,8*bytespervalue replaced ResolutionBits   
+        #numpy.add(pow(2.,8*self.parent.bytespervalue-1),self.intedges[:,3],self.intedges[:,3]) #LRJ 10-15-2013, Native NIDAQ format for most devices is a complement signed int.
+        
     def timingstring_construct(self):
         """
         inserts the timingstring fragment for this channel into the parent ControlArray's existing timingstring at position tsptr;
@@ -1006,7 +1011,7 @@ class channelData():
             # now need to interweave values / repeats
             # create a numedges x (self.bytespervalue+self.bytesperrepeat) sized byte array
             interweaver=numpy.empty([length,(self.parent.bytesperrepeat+self.parent.bytespervalue)],numpy.byte)
-            # load values into first bytespervalue columns
+            # load values into first bytespervalue columns. LRJ 10-16-2013-"signed" float value from scaling is cast into Two's Complement U16 
             interweaver[:,0:self.parent.bytespervalue]=numpy.lib.stride_tricks.as_strided(
                 numpy.asarray(self.intedges[:,3],dtype='<u'+str(self.parent.bytespervalue)).view('u1'),
                 [length,self.parent.bytespervalue],[self.parent.bytespervalue,1])
@@ -1021,7 +1026,6 @@ class channelData():
             self.parent.timingstring[self.parent.tsptr:(self.parent.tsptr+length*(self.parent.bytesperrepeat+self.parent.bytespervalue))]=interweaver.view('u1').reshape(interweaver.shape[0]*(self.parent.bytesperrepeat+self.parent.bytespervalue))
             self.parent.tsptr+=length*(self.parent.bytesperrepeat+self.parent.bytespervalue)
         else: # delay train algorithm
-            #pdb.set_trace()
             if length>0:
                 self.parent.timingstring[self.parent.tsptr:(self.parent.tsptr+length*(self.parent.bytesperrepeat+self.parent.bytespervalue))]=numpy.asarray((self.intedges[:,0]/self.parent.parentgenresolution).round(), dtype='<u'+str(self.parent.bytesperrepeat)).view('u1')  # NEED THIS ALGORITHM!
                 self.parent.tsptr+=length*(self.parent.bytesperrepeat+self.parent.bytespervalue)
@@ -1222,6 +1226,7 @@ class ChannelMap(gnosis.xml.objectify._XO_,XTSM_core):
                 except ValueError: res.update({tg:0.0002})
             cl-=1
         self.tGroupClockResolutions=res
+        self.hardwaretime=self.getDictMaxValue(self.tGroupClockResolutions)
         return res
         
 class Edge(gnosis.xml.objectify._XO_,XTSM_core):
