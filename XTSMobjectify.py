@@ -511,9 +511,15 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         self.tGroupNode=self.channelMap.getItemByFieldValue('TimingGroupData','GroupNumber',str(self.tGroup))
         self.clockgenresolution=self.channelMap.tGroupClockResolutions[self.tGroup]
         self.numchan=int(self.tGroupNode.ChannelCount.PCDATA)
-        self.scale=float(self.tGroupNode.Scale.PCDATA)     
+        self.range=float(self.tGroupNode.Range.PCDATA)     
         self.ResolutionBits=int(self.tGroupNode.ResolutionBits.PCDATA)
         self.bytespervalue=int(math.ceil(self.ResolutionBits/8.))
+        
+        if not self.tGroupNode.DAQCalibration.PCDATA==None:
+            self.DAQCalibration=float(self.tGroupNode.DAQCalibration.PCDATA) #LRJ 11-8-2013
+        else:
+            self.DAQCalibration= (pow(2.,self.ResolutionBits-1)-1)/(self.range/2.)
+            
         if hasattr(self.tGroupNode,'SoftwareTrigger'): self.swTrigger=True 
         if hasattr(self.tGroupNode,'DelayTrain'): self.dTrain=True 
         else: self.dTrain=False
@@ -575,7 +581,7 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         coerce explicit timing edges to a multiple of the parent clock's timebase
         (using the parent's resolution allows us to subresolution step.)
         """
-        self.groupEdges[2,:]=((self.groupEdges[2,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013 offset edges and intervals by 2*hardwaretime
+        self.groupEdges[2,:]=((self.groupEdges[2,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013
         self.groupIntervals[2,:]=((self.groupIntervals[2,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013
         self.groupIntervals[3,:]=((self.groupIntervals[3,:]/self.parentgenresolution).round())*self.parentgenresolution+2*self.channelMap.hardwaretime #LRJ 10-23-2013
         self.lasttimecoerced=float(math.ceil((self.seqendtime+2*self.channelMap.hardwaretime)/self.clockgenresolution))*self.clockgenresolution
@@ -743,7 +749,7 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
                 while not (ptrs == fptrs).all():
                     active = ptrs<fptrs # identify active pointers
                     time = min(channeltimes[ptrs[active.nonzero()]]) # current time smallest value for "active" pointers
-                    #LRJ 10-30-2013 hitstrue disables unused channels. Previous version removes updates to unused channels but added extra updates to all used channels at the start and end of the sequence regardless of what XTSM requests
+                    #LRJ 10-30-2013 hitstrue disables unused channels
                     lineindex=0
                     hitstrue=[]
                     for ct in channeltimes[ptrs]:
@@ -789,7 +795,7 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
                 outptr += 1
             # Now change final values to be zeros.
             bits = bitarray(0 for ch in self.channels.values())
-            outvals[-1] = numpy.fromstring((bits[::-1].tobytes()[::-1]), dtype = dtype)              
+            outvals[-1] = numpy.fromstring((bits[::-1].tobytes()[::-1]), dtype = dtype)             
         self.rawchannels = self.channels
         self.channels = {0:channelData(self, 0, times = outtimes, values = outvals)}
         self.numchan = 1
@@ -863,8 +869,8 @@ class ControlArray(gnosis.xml.objectify._XO_,XTSM_core):
         low=0
         if not (str.upper(str(dTrain)) == 'YES' or str.upper(str(aPulse)) == 'YES'):  # algorithm for using a standard value,repeat pair
             if pWidth=='':  # if pWidth not defined create bisecting falltimes
-                falltimes=(ctimes[0:-1]+ctimes[1:])/2.  # creates too few falltimes; need a last fall       
-                falltimes=numpy.append(falltimes,[ctimes[-1] + self.channelMap.hardwaretime]) #LRJ 10-31-2013 creates a last fall time one hardwaretime after last rise
+                falltimes=(ctimes[0:-1]+ctimes[1:])/2.  # creates too few falltimes; need a last fall            
+                falltimes=numpy.append(falltimes,[ctimes[-1] + self.channelMap.hardwaretime]) # creates a last fall time a hardwaretime after last rise
             else: # if pulsewidth defined, use it to create falltimes
                 falltimes=numpy.add(ctimes,pWidth)
             if self.ResolutionBits>1: # algorithm for an analog clock channel (should rarely be used)
@@ -986,10 +992,9 @@ class channelData():
         except: pass
         if ((minv == '') or (minv == None)): minv = min(self.intedges[:,3])
         if ((maxv == '') or (maxv == None)): maxv = max(self.intedges[:,3])
-        numpy.clip(self.intedges[:,3],max(-self.parent.scale/2.,minv),min(self.parent.scale/2.,maxv),self.intedges[:,3])        
+        numpy.clip(self.intedges[:,3],max(-self.parent.range/2.,minv),min(self.parent.range/2.,maxv),self.intedges[:,3])        
         # scale & offset values into integer ranges
-        numpy.multiply((pow(2.,self.parent.ResolutionBits-1)-1)/(self.parent.scale/2.),self.intedges[:,3],self.intedges[:,3]) #LRJ 10-15-2013,8*bytespervalue replaced ResolutionBits   
-        #numpy.add(pow(2.,8*self.parent.bytespervalue-1),self.intedges[:,3],self.intedges[:,3]) #LRJ 10-15-2013, Native NIDAQ format for most devices is a complement signed int.
+        numpy.multiply(self.parent.DAQCalibration,self.intedges[:,3],self.intedges[:,3]) #LRJ 10-15-2013,8*bytespervalue replaced ResolutionBits   
         
     def timingstring_construct(self):
         """
